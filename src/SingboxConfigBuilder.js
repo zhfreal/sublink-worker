@@ -1,17 +1,22 @@
-import { SING_BOX_CONFIG, generateRuleSets, generateRules, getOutbounds, PREDEFINED_RULE_SETS} from './config.js';
+import { SING_BOX_CONFIG, generateRuleSets, generateRules, getOutbounds, PREDEFINED_RULE_SETS, getOutboundDirectionType } from './config.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy, parseCountryFromNodeName } from './utils.js';
 import { t } from './i18n/index.js';
 
 export class SingboxConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry = false, proxyType = 0) {
         if (baseConfig === undefined) {
             baseConfig = SING_BOX_CONFIG;
             if (baseConfig.dns && baseConfig.dns.servers) {
                 baseConfig.dns.servers[0].detour = t('outboundNames.Node Select');
             }
         }
-        super(inputString, baseConfig, lang, userAgent, groupByCountry);
+        super(inputString, baseConfig, lang, userAgent, groupByCountry, proxyType);
+        // don't support load balancing in singbox
+        // set it to 1: select automatically if proxyType is 2
+        if (this.proxyType === 2) {
+            this.proxyType = 1
+        }
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         this.countryGroupNames = [];
@@ -71,33 +76,64 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         });
     }
 
-    buildSelectorMembers(proxyList = []) {
-        const normalize = (s) => typeof s === 'string' ? s.trim() : s;
-        const base = this.groupByCountry
-            ? [
-                t('outboundNames.Node Select'),
-                t('outboundNames.Auto Select'),
-                ...(this.manualGroupName ? [this.manualGroupName] : []),
-                ...(this.countryGroupNames || [])
-              ]
-            : [
-                t('outboundNames.Node Select'),
-                ...proxyList
-              ];
-        const combined = ['DIRECT', 'REJECT', ...base].filter(Boolean);
-        const seen = new Set();
-        return combined.filter(name => {
-            const key = normalize(name);
-            if (!key || seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
+    // no load balance support in singbox
+    addBalanceSelectGroup(proxyList) {
+
+    }
+
+    // buildSelectorMembers(proxyList = []) {
+    //     const normalize = (s) => typeof s === 'string' ? s.trim() : s;
+    //     const base = this.groupByCountry
+    //         ? [
+    //             t('outboundNames.Node Select'),
+    //             t('outboundNames.Auto Select'),
+    //             ...(this.manualGroupName ? [this.manualGroupName] : []),
+    //             ...(this.countryGroupNames || [])
+    //         ]
+    //         : [
+    //             t('outboundNames.Node Select'),
+    //             ...proxyList
+    //         ];
+    //     const combined = ['DIRECT', 'REJECT', ...base].filter(Boolean);
+    //     const seen = new Set();
+    //     return combined.filter(name => {
+    //         const key = normalize(name);
+    //         if (!key || seen.has(key)) return false;
+    //         seen.add(key);
+    //         return true;
+    //     });
+    // }
+
+    // PATCH: won't add unnecessary selector
+    // type: -1: reject/block, 0: direct, 1: proxy
+    buildSelectorMember(directionType = 1) {
+        const select = t('outboundNames.Node Select');
+        const autoSelect = t('outboundNames.Auto Select');
+        const loadBalance = t('outboundNames.Load Balance');
+        const direct = 'DIRECT';
+        const reject = 'REJECT';
+        let proxy = select;
+        switch (directionType) {
+            case -1: proxy = reject; break;
+            case 0: proxy = direct; break;
+            case 1: {
+                // proxyType: 0, select manually; 1, select automatically; 2, load balancing
+                if (this.proxyType === 0) proxy = select;  // select manually
+                else if (this.proxyType === 1) proxy = autoSelect; //select automatically
+                else if (this.proxyType === 2) proxy = loadBalance; //this.proxyType 
+                break;
+            };
+            default: proxy = select; break;
+        };
+        return proxy;
     }
 
     addOutboundGroups(outbounds, proxyList) {
         outbounds.forEach(outbound => {
             if (outbound !== t('outboundNames.Node Select')) {
-                const selectorMembers = this.buildSelectorMembers(proxyList);
+                // const selectorMembers = this.buildSelectorMembers(proxyList);
+                const directionType = getOutboundDirectionType(outbound);
+                const selectorMembers = Array.from([this.buildSelectorMember(directionType)]);
                 this.config.outbounds.push({
                     type: "selector",
                     tag: t(`outboundNames.${outbound}`),
@@ -110,7 +146,9 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     addCustomRuleGroups(proxyList) {
         if (Array.isArray(this.customRules)) {
             this.customRules.forEach(rule => {
-                const selectorMembers = this.buildSelectorMembers(proxyList);
+                // const selectorMembers = this.buildSelectorMembers(proxyList);
+                const directionType = getOutboundDirectionType(outbound);
+                const selectorMembers = Array.from([this.buildSelectorMember(directionType)]);
                 this.config.outbounds.push({
                     type: "selector",
                     tag: rule.name,
@@ -121,7 +159,9 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
     }
 
     addFallBackGroup(proxyList) {
-        const selectorMembers = this.buildSelectorMembers(proxyList);
+        // const selectorMembers = this.buildSelectorMembers(proxyList);
+        const directionType = getOutboundDirectionType('Fall Back');
+        const selectorMembers = Array.from([this.buildSelectorMember(directionType)]);
         this.config.outbounds.push({
             type: "selector",
             tag: t('outboundNames.Fall Back'),
@@ -206,7 +246,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
 
     formatConfig() {
         const rules = generateRules(this.selectedRules, this.customRules);
-        const { site_rule_sets, ip_rule_sets } = generateRuleSets(this.selectedRules,this.customRules);
+        const { site_rule_sets, ip_rule_sets } = generateRuleSets(this.selectedRules, this.customRules);
 
         this.config.route.rule_set = [...site_rule_sets, ...ip_rule_sets];
 
@@ -222,7 +262,7 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         rules.filter(rule => !!rule.site_rules[0]).map(rule => {
             this.config.route.rules.push({
                 rule_set: [
-                ...(rule.site_rules.length > 0 && rule.site_rules[0] !== '' ? rule.site_rules : []),
+                    ...(rule.site_rules.length > 0 && rule.site_rules[0] !== '' ? rule.site_rules : []),
                 ],
                 protocol: rule.protocol,
                 outbound: t(`outboundNames.${rule.outbound}`)
@@ -232,11 +272,11 @@ export class SingboxConfigBuilder extends BaseConfigBuilder {
         rules.filter(rule => !!rule.ip_rules[0]).map(rule => {
             this.config.route.rules.push({
                 rule_set: [
-                ...(rule.ip_rules.filter(ip => ip.trim() !== '').map(ip => `${ip}-ip`))
+                    ...(rule.ip_rules.filter(ip => ip.trim() !== '').map(ip => `${ip}-ip`))
                 ],
                 protocol: rule.protocol,
                 outbound: t(`outboundNames.${rule.outbound}`)
-          });
+            });
         });
 
         rules.filter(rule => !!rule.ip_cidr).map(rule => {

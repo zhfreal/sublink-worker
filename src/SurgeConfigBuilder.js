@@ -4,13 +4,13 @@ import { SURGE_CONFIG, SURGE_SITE_RULE_SET_BASEURL, SURGE_IP_RULE_SET_BASEURL, g
 import { t } from './i18n/index.js';
 
 export class SurgeConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry, proxyType = 0) {
         // Not yet implemented, set aside for later use ;)
         // if (!baseConfig) {
         //     baseConfig = SURGE_CONFIG;
         // }
         baseConfig = SURGE_CONFIG;
-        super(inputString, baseConfig, lang, userAgent, groupByCountry);
+        super(inputString, baseConfig, lang, userAgent, groupByCountry, proxyType);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         this.subscriptionUrl = null;
@@ -121,26 +121,26 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
 
     addProxyToConfig(proxy) {
         this.config.proxies = this.config.proxies || [];
-        
+
         // Get the name of the proxy to be added
         const proxyName = this.getProxyName(proxy);
-        
+
         // Check if there are proxies with similar names in existing proxies
         const similarProxies = this.config.proxies
             .map(p => this.getProxyName(p))
             .filter(name => name.includes(proxyName));
-            
+
         // Check if there is a proxy with identical configuration
-        const isIdentical = this.config.proxies.some(p => 
+        const isIdentical = this.config.proxies.some(p =>
             // Compare the remaining configuration after removing the name part
             p.substring(p.indexOf('=')) === proxy.substring(proxy.indexOf('='))
         );
-        
+
         if (isIdentical) {
             // If there is a proxy with identical configuration, skip adding it
             return;
         }
-        
+
         // If there are proxies with similar names but different configurations, modify the name
         if (similarProxies.length > 0) {
             // Get the position of the equals sign
@@ -150,7 +150,7 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
                 proxy = `${proxyName} ${similarProxies.length + 1}${proxy.substring(equalsPos)}`;
             }
         }
-        
+
         this.config.proxies.push(proxy);
     }
 
@@ -187,11 +187,11 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
                 t('outboundNames.Auto Select'),
                 ...(this.manualGroupName ? [this.manualGroupName] : []),
                 ...((this.countryGroupNames || []))
-              ]
+            ]
             : [
                 t('outboundNames.Node Select'),
                 ...proxyList
-              ];
+            ];
         return this.withDirectReject(base);
     }
 
@@ -353,31 +353,31 @@ export class SurgeConfigBuilder extends BaseConfigBuilder {
 
         rules.filter(rule => !!rule.domain_suffix).map(rule => {
             rule.domain_suffix.forEach(suffix => {
-                finalConfig.push(`DOMAIN-SUFFIX,${suffix},${t('outboundNames.'+ rule.outbound)}`);
+                finalConfig.push(`DOMAIN-SUFFIX,${suffix},${t('outboundNames.' + rule.outbound)}`);
             });
         });
 
         rules.filter(rule => !!rule.domain_keyword).map(rule => {
             rule.domain_keyword.forEach(keyword => {
-                finalConfig.push(`DOMAIN-KEYWORD,${keyword},${t('outboundNames.'+ rule.outbound)}`);
+                finalConfig.push(`DOMAIN-KEYWORD,${keyword},${t('outboundNames.' + rule.outbound)}`);
             });
         });
 
         rules.filter(rule => rule.site_rules[0] !== '').map(rule => {
             rule.site_rules.forEach(site => {
-                finalConfig.push(`RULE-SET,${SURGE_SITE_RULE_SET_BASEURL}${site}.conf,${t('outboundNames.'+ rule.outbound)}`);
+                finalConfig.push(`RULE-SET,${SURGE_SITE_RULE_SET_BASEURL}${site}.conf,${t('outboundNames.' + rule.outbound)}`);
             });
         });
 
         rules.filter(rule => rule.ip_rules[0] !== '').map(rule => {
             rule.ip_rules.forEach(ip => {
-                finalConfig.push(`RULE-SET,${SURGE_IP_RULE_SET_BASEURL}${ip}.txt,${t('outboundNames.'+ rule.outbound)},no-resolve`);
+                finalConfig.push(`RULE-SET,${SURGE_IP_RULE_SET_BASEURL}${ip}.txt,${t('outboundNames.' + rule.outbound)},no-resolve`);
             });
         });
 
         rules.filter(rule => !!rule.ip_cidr).map(rule => {
             rule.ip_cidr.forEach(cidr => {
-                finalConfig.push(`IP-CIDR,${cidr},${t('outboundNames.'+ rule.outbound)},no-resolve`);
+                finalConfig.push(`IP-CIDR,${cidr},${t('outboundNames.' + rule.outbound)},no-resolve`);
             });
         });
 

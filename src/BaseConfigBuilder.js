@@ -5,7 +5,9 @@ import { t, setLanguage } from './i18n/index.js';
 import { generateRules, getOutbounds, PREDEFINED_RULE_SETS } from './config.js';
 
 export class BaseConfigBuilder {
-    constructor(inputString, baseConfig, lang, userAgent, groupByCountry = false) {
+    // add proxyType support
+    // proxyType: 0, select manually; 1, select automatically; 2, load balancing
+    constructor(inputString, baseConfig, lang, userAgent, groupByCountry = false, proxyType = 0) {
         this.inputString = inputString;
         this.config = DeepCopy(baseConfig);
         this.customRules = [];
@@ -14,6 +16,7 @@ export class BaseConfigBuilder {
         this.userAgent = userAgent;
         this.appliedOverrideKeys = new Set();
         this.groupByCountry = groupByCountry;
+        this.proxyType = proxyType;
     }
 
     async build() {
@@ -75,7 +78,7 @@ export class BaseConfigBuilder {
                         // not YAML; fall through
                     }
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
 
         // Otherwise, line-by-line processing (URLs, subscription content, remote lists, etc.)
@@ -156,7 +159,10 @@ export class BaseConfigBuilder {
         } else if (this.selectedRules && Object.keys(this.selectedRules).length > 0) {
             outbounds = getOutbounds(this.selectedRules);
         } else {
-            outbounds = getOutbounds(PREDEFINED_RULE_SETS.minimal);
+            // outbounds = getOutbounds(PREDEFINED_RULE_SETS.minimal);
+            outbounds = getOutbounds(PREDEFINED_RULE_SETS.basis);
+            // put selectedRules into config
+            this.selectedRules = outbounds;
         }
         return outbounds;
     }
@@ -187,6 +193,10 @@ export class BaseConfigBuilder {
 
     addNodeSelectGroup(proxyList) {
         throw new Error('addNodeSelectGroup must be implemented in child class');
+    }
+
+    addBalanceSelectGroup(proxyList) {
+        // throw new Error('addBalanceSelectGroup must be implemented in child class');
     }
 
     addOutboundGroups(outbounds, proxyList) {
@@ -223,6 +233,7 @@ export class BaseConfigBuilder {
 
         this.addAutoSelectGroup(proxyList);
         this.addNodeSelectGroup(proxyList);
+        this.addBalanceSelectGroup(proxyList);
         if (this.groupByCountry) {
             this.addCountryGroups();
         }

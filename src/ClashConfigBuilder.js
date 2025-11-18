@@ -1,15 +1,15 @@
 import yaml from 'js-yaml';
-import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS } from './config.js';
+import { CLASH_CONFIG, generateRules, generateClashRuleSets, getOutbounds, PREDEFINED_RULE_SETS, getOutboundDirectionType } from './config.js';
 import { BaseConfigBuilder } from './BaseConfigBuilder.js';
 import { DeepCopy, parseCountryFromNodeName } from './utils.js';
 import { t } from './i18n/index.js';
 
 export class ClashConfigBuilder extends BaseConfigBuilder {
-    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry) {
+    constructor(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry, proxyType = 0) {
         if (!baseConfig) {
             baseConfig = CLASH_CONFIG;
         }
-        super(inputString, baseConfig, lang, userAgent, groupByCountry);
+        super(inputString, baseConfig, lang, userAgent, groupByCountry, proxyType);
         this.selectedRules = selectedRules;
         this.customRules = customRules;
         this.countryGroupNames = [];
@@ -247,43 +247,74 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const nodeName = t('outboundNames.Node Select');
         const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(nodeName));
         if (exists) return;
-        const list = [
-            'DIRECT',
-            'REJECT',
-            t('outboundNames.Auto Select'),
-            ...proxyList
-        ];
         this.config['proxy-groups'].unshift({
             type: "select",
             name: nodeName,
-            proxies: list
+            proxies: DeepCopy(proxyList),
         });
     }
 
-    buildSelectGroupMembers(proxyList = []) {
+    addBalanceSelectGroup(proxyList) {
+        this.config['proxy-groups'] = this.config['proxy-groups'] || [];
         const normalize = (s) => typeof s === 'string' ? s.trim() : s;
-        const directReject = ['DIRECT', 'REJECT'];
-        const base = this.groupByCountry
-            ? [
-                t('outboundNames.Node Select'),
-                t('outboundNames.Auto Select'),
-                ...(this.manualGroupName ? [this.manualGroupName] : []),
-                ...((this.countryGroupNames || []))
-            ]
-            : [
-                t('outboundNames.Node Select'),
-                ...proxyList
-            ];
-        const combined = [...directReject, ...base].filter(Boolean);
-        const seen = new Set();
-        return combined.filter(name => {
-            const key = normalize(name);
-            if (!key || seen.has(key)) return false;
-            seen.add(key);
-            return true;
+        const nodeName = t('outboundNames.Load Balance');
+        const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(nodeName));
+        if (exists) return;
+        this.config['proxy-groups'].unshift({
+            type: "load-balance",
+            name: nodeName,
+            proxies: DeepCopy(proxyList),
         });
     }
 
+    // Unified rule structure
+    // type: -1: reject/block, 0: direct, 1: proxy
+    buildSelectGroupMember(directionType = 1) {
+        const select = t('outboundNames.Node Select');
+        const autoSelect = t('outboundNames.Auto Select');
+        const loadBalance = t('outboundNames.Load Balance');
+        const direct = 'DIRECT';
+        const reject = 'REJECT';
+        let proxy = select;
+        switch (directionType) {
+            case -1: proxy = reject; break;
+            case 0: proxy = direct; break;
+            case 1: {
+                // proxyType: 0, select manually; 1, select automatically; 2, load balancing
+                if (this.proxyType === 0) proxy = select;  // select manually
+                else if (this.proxyType === 1) proxy = autoSelect; //select automatically
+                else if (this.proxyType === 2) proxy = loadBalance; //this.proxyType 
+                break;
+            };
+            default: proxy = select; break;
+        };
+        return proxy;
+    }
+    // buildSelectGroupMembers(proxyList = []) {
+    //     const normalize = (s) => typeof s === 'string' ? s.trim() : s;
+    //     const directReject = ['DIRECT', 'REJECT'];
+    //     const base = this.groupByCountry
+    //         ? [
+    //             t('outboundNames.Node Select'),
+    //             t('outboundNames.Auto Select'),
+    //             ...(this.manualGroupName ? [this.manualGroupName] : []),
+    //             ...((this.countryGroupNames || []))
+    //         ]
+    //         : [
+    //             t('outboundNames.Node Select'),
+    //             ...proxyList
+    //         ];
+    //     const combined = [...directReject, ...base].filter(Boolean);
+    //     const seen = new Set();
+    //     return combined.filter(name => {
+    //         const key = normalize(name);
+    //         if (!key || seen.has(key)) return false;
+    //         seen.add(key);
+    //         return true;
+    //     });
+    // }
+
+    // we don't use proxyList anymore
     addOutboundGroups(outbounds, proxyList) {
         outbounds.forEach(outbound => {
             if (outbound !== t('outboundNames.Node Select')) {
@@ -291,7 +322,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 const name = t(`outboundNames.${outbound}`);
                 const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(name));
                 if (!exists) {
-                    const proxies = this.buildSelectGroupMembers(proxyList);
+                    // type: -1: reject/block, 0: direct, 1: proxy
+                    const directionType = getOutboundDirectionType(outbound);
+                    const proxies = Array.from([this.buildSelectGroupMember(directionType)]);
                     this.config['proxy-groups'].push({
                         type: "select",
                         name,
@@ -302,6 +335,24 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         });
     }
 
+    // addOutboundGroups(outbounds, proxyList) {
+    //     outbounds.forEach(outbound => {
+    //         if (outbound !== t('outboundNames.Node Select')) {
+    //             const normalize = (s) => typeof s === 'string' ? s.trim() : s;
+    //             const name = t(`outboundNames.${outbound}`);
+    //             const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(name));
+    //             if (!exists) {
+    //                 const proxies = this.buildSelectGroupMembers(proxyList);
+    //                 this.config['proxy-groups'].push({
+    //                     type: "select",
+    //                     name,
+    //                     proxies
+    //                 });
+    //             }
+    //         }
+    //     });
+    // }
+
     addCustomRuleGroups(proxyList) {
         if (Array.isArray(this.customRules)) {
             this.customRules.forEach(rule => {
@@ -309,7 +360,9 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                 const name = t(`outboundNames.${rule.name}`);
                 const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(name));
                 if (!exists) {
-                    const proxies = this.buildSelectGroupMembers(proxyList);
+                    // if type is set, use it; otherwise, use default
+                    const directionType = rule.type || 1;
+                    const proxies = Array.from([this.buildSelectGroupMember(directionType)]);
                     this.config['proxy-groups'].push({
                         type: "select",
                         name,
@@ -325,7 +378,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         const name = t('outboundNames.Fall Back');
         const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(name));
         if (exists) return;
-        const proxies = this.buildSelectGroupMembers(proxyList);
+        const directionType = 1; // default as proxy
+        const proxies = Array.from([this.buildSelectGroupMember(directionType)]);
         this.config['proxy-groups'].push({
             type: "select",
             name,
@@ -434,13 +488,17 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
 
         rules.filter(rule => !!rule.site_rules[0]).map(rule => {
             rule.site_rules.forEach(site => {
-                ruleResults.push(`RULE-SET,${site},${t('outboundNames.' + rule.outbound)}`);
+                // patch for rule name: geosite-<rule>
+                ruleResults.push(`RULE-SET,geosite-${site},${t('outboundNames.' + rule.outbound)}`);
+                // ruleResults.push(`RULE-SET,${site},${t('outboundNames.' + rule.outbound)}`);
             });
         });
 
         rules.filter(rule => !!rule.ip_rules[0]).map(rule => {
             rule.ip_rules.forEach(ip => {
-                ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`);
+                // patch for rule name: ip-<rule>
+                ruleResults.push(`RULE-SET,geoip-${ip},${t('outboundNames.' + rule.outbound)},no-resolve`);
+                // ruleResults.push(`RULE-SET,${ip},${t('outboundNames.' + rule.outbound)},no-resolve`);
             });
         });
 
