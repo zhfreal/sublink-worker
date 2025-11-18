@@ -18,20 +18,27 @@ export default {
 
         try {
             const url = new URL(request.url);
-            const lang = url.searchParams.get('lang');
+            const lang = url.searchParams.get('lang') || env.LANG || 'en-US';
             setLanguage(lang || request.headers.get('accept-language')?.split(',')[0]);
-            if (request.method === 'GET' && url.pathname === '/') {
+            let pathName = url.pathname;
+            // trim last slash
+            if (pathName.endsWith('/')) {
+                pathName = pathName.slice(0, -1);
+            }
+            // lowercase
+            pathName = pathName ? pathName.toLowerCase() : '/';
+            if (request.method === 'GET' && pathName === '/') {
                 // Return the HTML form for GET requests
                 return new Response(generateHtml('', '', '', '', url.origin), {
                     headers: { 'Content-Type': 'text/html' }
                 });
-            } else if (url.pathname.startsWith('/singbox') || url.pathname.startsWith('/clash') || url.pathname.startsWith('/surge')) {
+            } else if (['/clash', '/singbox', '/surge', '/sing-box'].includes(pathName)) {
                 const inputString = url.searchParams.get('config');
                 let selectedRules = url.searchParams.get('selectedRules');
                 let customRules = url.searchParams.get('customRules');
                 const groupByCountry = url.searchParams.get('group_by_country') === 'true';
                 // 获取语言参数，如果为空则使用默认值
-                let lang = url.searchParams.get('lang') || 'zh-CN';
+                // let lang = url.searchParams.get('lang') || lang;
                 // Get custom UserAgent
                 let userAgent = url.searchParams.get('ua');
                 if (!userAgent) {
@@ -91,37 +98,40 @@ export default {
                 }
 
                 let configBuilder;
-                if (url.pathname.startsWith('/singbox')) {
+                if (pathName === '/singbox' || pathName === '/sing-box') {
                     configBuilder = new SingboxConfigBuilder(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry, proxyType);
-                } else if (url.pathname.startsWith('/clash')) {
+                } else if (pathName === '/clash') {
                     configBuilder = new ClashConfigBuilder(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry, proxyType);
-                } else {
+                } else if (pathName === '/surge') {
                     configBuilder = new SurgeConfigBuilder(inputString, selectedRules, customRules, baseConfig, lang, userAgent, groupByCountry, proxyType)
                         .setSubscriptionUrl(url.href);
+                } else {
+                    // return 404
+                    return new Response(t('notFound'), { status: 404 });
                 }
 
                 const config = await configBuilder.build();
 
                 // 设置正确的 Content-Type 和其他响应头
                 const headers = {
-                    'content-type': url.pathname.startsWith('/singbox')
+                    'content-type': pathName === '/singbox' || pathName === '/sing-box'
                         ? 'application/json; charset=utf-8'
-                        : url.pathname.startsWith('/clash')
+                        : pathName === '/clash'
                             ? 'text/yaml; charset=utf-8'
                             : 'text/plain; charset=utf-8'
                 };
 
                 // 如果是 Surge 配置，添加 subscription-userinfo 头
-                if (url.pathname.startsWith('/surge')) {
+                if (pathName === '/surge') {
                     headers['subscription-userinfo'] = 'upload=0; download=0; total=10737418240; expire=2546249531';
                 }
 
                 return new Response(
-                    url.pathname.startsWith('/singbox') ? JSON.stringify(config, null, 2) : config,
+                    pathName === '/singbox' ? JSON.stringify(config, null, 2) : config,
                     { headers }
                 );
 
-            } else if (url.pathname === '/shorten') {
+            } else if (pathName === '/shorten') {
                 const originalUrl = url.searchParams.get('url');
                 if (!originalUrl) {
                     return new Response(t('missingUrl'), { status: 400 });
@@ -135,7 +145,7 @@ export default {
                     headers: { 'Content-Type': 'application/json' }
                 });
 
-            } else if (url.pathname === '/shorten-v2') {
+            } else if (pathName === '/shorten-v2') {
                 const originalUrl = url.searchParams.get('url');
                 let shortCode = url.searchParams.get('shortCode');
 
@@ -157,18 +167,18 @@ export default {
                     headers: { 'Content-Type': 'text/plain' }
                 });
 
-            } else if (url.pathname.startsWith('/b/') || url.pathname.startsWith('/c/') || url.pathname.startsWith('/x/') || url.pathname.startsWith('/s/')) {
-                const shortCode = url.pathname.split('/')[2];
+            } else if (pathName.startsWith('/b/') || pathName.startsWith('/c/') || pathName.startsWith('/x/') || pathName.startsWith('/s/')) {
+                const shortCode = pathName.split('/')[2];
                 const originalParam = await SUBLINK_KV.get(shortCode);
                 let originalUrl;
 
-                if (url.pathname.startsWith('/b/')) {
+                if (pathName.startsWith('/b/')) {
                     originalUrl = `${url.origin}/singbox${originalParam}`;
-                } else if (url.pathname.startsWith('/c/')) {
+                } else if (pathName.startsWith('/c/')) {
                     originalUrl = `${url.origin}/clash${originalParam}`;
-                } else if (url.pathname.startsWith('/x/')) {
+                } else if (pathName.startsWith('/x/')) {
                     originalUrl = `${url.origin}/xray${originalParam}`;
-                } else if (url.pathname.startsWith('/s/')) {
+                } else if (pathName.startsWith('/s/')) {
                     originalUrl = `${url.origin}/surge${originalParam}`;
                 }
 
@@ -177,7 +187,7 @@ export default {
                 }
 
                 return Response.redirect(originalUrl, 302);
-            } else if (url.pathname.startsWith('/xray')) {
+            } else if (pathName === '/xray') {
                 // Handle Xray config requests
                 const inputString = url.searchParams.get('config');
                 if (!inputString) {
@@ -234,9 +244,9 @@ export default {
                 return new Response(encodeBase64(finalString), {
                     headers: { 'content-type': 'application/json; charset=utf-8' }
                 });
-            } else if (url.pathname === '/favicon.ico') {
+            } else if (pathName === '/favicon.ico') {
                 return Response.redirect('https://cravatar.cn/avatar/9240d78bbea4cf05fb04f2b86f22b18d?s=160&d=retro&r=g', 301)
-            } else if (url.pathname === '/config') {
+            } else if (pathName === '/config') {
                 const { type, content } = await request.json();
                 const configId = `${type}_${GenerateWebPath(8)}`;
 
@@ -276,7 +286,7 @@ export default {
                         headers: { 'Content-Type': 'text/plain' }
                     });
                 }
-            } else if (url.pathname === '/resolve') {
+            } else if (pathName === '/resolve') {
                 const shortUrl = url.searchParams.get('url');
                 if (!shortUrl) {
                     return new Response(t('missingUrl'), { status: 400 });
@@ -284,7 +294,7 @@ export default {
 
                 try {
                     const urlObj = new URL(shortUrl);
-                    const pathParts = urlObj.pathname.split('/');
+                    const pathParts = pathName.split('/');
 
                     if (pathParts.length < 3) {
                         return new Response(t('invalidShortUrl'), { status: 400 });
