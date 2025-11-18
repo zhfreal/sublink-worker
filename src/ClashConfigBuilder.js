@@ -48,11 +48,12 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     servername: proxy.tls?.server_name || '',
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     network: proxy.transport?.type || proxy.network || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws'
-                        ? {
-                            path: proxy.transport.path,
-                            headers: proxy.transport.headers
-                        }
+                    'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
+                        path: proxy.transport.path,
+                        headers: proxy.transport.headers,
+                        'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
+                        'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
+                    }
                         : undefined,
                     'http-opts': proxy.transport?.type === 'http'
                         ? (() => {
@@ -93,9 +94,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'client-fingerprint': proxy.tls.utls?.fingerprint,
                     servername: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws' ? {
+                    'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
                         path: proxy.transport.path,
-                        headers: proxy.transport.headers
+                        headers: proxy.transport.headers,
+                        'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
+                        'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
                     } : undefined,
                     'reality-opts': proxy.tls.reality?.enabled ? {
                         'public-key': proxy.tls.reality.public_key,
@@ -143,9 +146,11 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     'client-fingerprint': proxy.tls.utls?.fingerprint,
                     sni: proxy.tls?.server_name || '',
                     network: proxy.transport?.type || 'tcp',
-                    'ws-opts': proxy.transport?.type === 'ws' ? {
+                    'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
                         path: proxy.transport.path,
-                        headers: proxy.transport.headers
+                        headers: proxy.transport.headers,
+                        'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
+                        'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
                     } : undefined,
                     'reality-opts': proxy.tls.reality?.enabled ? {
                         'public-key': proxy.tls.reality.public_key,
