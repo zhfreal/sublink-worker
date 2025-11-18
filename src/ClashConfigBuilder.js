@@ -47,7 +47,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tls: proxy.tls?.enabled || false,
                     servername: proxy.tls?.server_name || '',
                     'skip-cert-verify': !!proxy.tls?.insecure,
-                    network: proxy.transport?.type || proxy.network || 'tcp',
+                    network: proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport.type || 'tcp',
                     'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
                         path: proxy.transport.path,
                         headers: proxy.transport.headers,
@@ -93,7 +93,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tls: proxy.tls?.enabled || false,
                     'client-fingerprint': proxy.tls.utls?.fingerprint,
                     servername: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type || 'tcp',
+                    network: proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport.type || 'tcp',
                     'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
                         path: proxy.transport.path,
                         headers: proxy.transport.headers,
@@ -145,7 +145,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tls: proxy.tls?.enabled || false,
                     'client-fingerprint': proxy.tls.utls?.fingerprint,
                     sni: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type || 'tcp',
+                    network: proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport.type || 'tcp',
                     'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
                         path: proxy.transport.path,
                         headers: proxy.transport.headers,
