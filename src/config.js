@@ -271,7 +271,7 @@ export function getOutboundDirectionType(selectedRuleName) {
         return 1;
     }
     const selectedRule = UNIFIED_RULES.find(rule => rule.name === selectedRuleName);
-    const directionType = selectedRule?.directionType?.directionType || 1;
+    const directionType = selectedRule.directionType;
     return directionType;
 }
 

@@ -317,20 +317,18 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
     // we don't use proxyList anymore
     addOutboundGroups(outbounds, proxyList) {
         outbounds.forEach(outbound => {
-            if (outbound !== t('outboundNames.Node Select')) {
-                const normalize = (s) => typeof s === 'string' ? s.trim() : s;
-                const name = t(`outboundNames.${outbound}`);
-                const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(name));
-                if (!exists) {
-                    // type: -1: reject/block, 0: direct, 1: proxy
-                    const directionType = getOutboundDirectionType(outbound);
-                    const proxies = Array.from([this.buildSelectGroupMember(directionType)]);
-                    this.config['proxy-groups'].push({
-                        type: "select",
-                        name,
-                        proxies
-                    });
-                }
+            const normalize = (s) => typeof s === 'string' ? s.trim() : s;
+            const name = t(`outboundNames.${outbound}`);
+            const exists = this.config['proxy-groups'].some(g => g && normalize(g.name) === normalize(name));
+            if (!exists) {
+                // type: -1: reject/block, 0: direct, 1: proxy
+                const directionType = getOutboundDirectionType(outbound);
+                const proxies = Array.from([this.buildSelectGroupMember(directionType)]);
+                this.config['proxy-groups'].push({
+                    type: "select",
+                    name,
+                    proxies
+                });
             }
         });
     }

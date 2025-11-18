@@ -210,7 +210,7 @@ const translations = {
             'Cloud Services': '☁️ Cloud Services',
             'Non-China': '🌐 Non-China',
             'Manual Switch': '🖐️ Manual Switch',
-            'Reject': '⛔ Ad Blocking',
+            'Reject': '⛔ Reject',
             "Direct": '🌳 Direct',
             'GLOBAL': '🌐 GLOBAL'
         },
