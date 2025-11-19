@@ -24,6 +24,55 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
         return proxy.name;
     }
 
+    getWsOpts(proxy) {
+        if (['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type)) {
+            let tempWsObj = {
+                headers: proxy.transport.headers,
+                'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
+                'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
+            };
+            // proxy.transport.path like "/apath?query=value"
+            const tUrlStr = `http://127.0.0.1${proxy.transport.path}`;
+            let tUrl = new URL(tUrlStr);
+            // const path = tUrl.pathname;
+            // const query = tUrl.search;
+            if (tUrl.searchParams.has('ed')) {
+                tempWsObj['early-data-header-name'] = "Sec-WebSocket-Protocol";
+                // ed's vaule must be a number, otherwise make it to 2560
+                tempWsObj['max-early-data'] = Number(tUrl.searchParams.get('ed')) || 2560;
+                // remove ed from query
+                tUrl.searchParams.delete('ed');
+                // remove leading fake http://127.0.0.1
+                tempWsObj['path'] = tUrl.toString().replace('http://127.0.0.1', '');
+            }
+            return tempWsObj;
+        }
+        return undefined;
+    }
+
+    getGrpcOpts(proxy) {
+        if (proxy.transport?.type === 'grpc') {
+            return {
+                'grpc-service-name': proxy.transport.service_name
+            };
+        }
+        return undefined;
+    }
+
+    getRealityOpts(proxy) {
+        if (proxy.tls?.reality?.enabled) {
+            return {
+                'public-key': proxy.tls.reality.public_key,
+                'short-id': proxy.tls.reality.short_id,
+            };
+        }
+        return undefined;
+    }
+
+    getNetwork(proxy) {
+        return proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport?.type || 'tcp';
+    }
+
     convertProxy(proxy) {
         switch (proxy.type) {
             case 'shadowsocks':
@@ -47,14 +96,8 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tls: proxy.tls?.enabled || false,
                     servername: proxy.tls?.server_name || '',
                     'skip-cert-verify': !!proxy.tls?.insecure,
-                    network: proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport.type || 'tcp',
-                    'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
-                        path: proxy.transport.path,
-                        headers: proxy.transport.headers,
-                        'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
-                        'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
-                    }
-                        : undefined,
+                    network: this.getNetwork(proxy),
+                    'ws-opts': this.getWsOpts(proxy),
                     'http-opts': proxy.transport?.type === 'http'
                         ? (() => {
                             const opts = {
@@ -67,11 +110,7 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                             return opts;
                         })()
                         : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc'
-                        ? {
-                            'grpc-service-name': proxy.transport.service_name
-                        }
-                        : undefined,
+                    'grpc-opts': this.getGrpcOpts(proxy),
                     'h2-opts': proxy.transport?.type === 'h2'
                         ? {
                             path: proxy.transport.path,
@@ -93,20 +132,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tls: proxy.tls?.enabled || false,
                     'client-fingerprint': proxy.tls.utls?.fingerprint,
                     servername: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport.type || 'tcp',
-                    'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
-                        path: proxy.transport.path,
-                        headers: proxy.transport.headers,
-                        'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
-                        'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
-                    } : undefined,
-                    'reality-opts': proxy.tls.reality?.enabled ? {
-                        'public-key': proxy.tls.reality.public_key,
-                        'short-id': proxy.tls.reality.short_id,
-                    } : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc' ? {
-                        'grpc-service-name': proxy.transport.service_name,
-                    } : undefined,
+                    network: this.getNetwork(proxy),
+                    'ws-opts': this.getWsOpts(proxy),
+                    'reality-opts': this.getRealityOpts(proxy),
+                    'grpc-opts': this.getGrpcOpts(proxy),
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     ...(typeof proxy.udp !== 'undefined' ? { udp: proxy.udp } : {}),
@@ -145,20 +174,10 @@ export class ClashConfigBuilder extends BaseConfigBuilder {
                     tls: proxy.tls?.enabled || false,
                     'client-fingerprint': proxy.tls.utls?.fingerprint,
                     sni: proxy.tls?.server_name || '',
-                    network: proxy.transport?.type === "httpupgrade" ? "ws" : proxy.transport.type || 'tcp',
-                    'ws-opts': ['ws', "websocket", "httpupgrade"].includes(proxy.transport?.type) ? {
-                        path: proxy.transport.path,
-                        headers: proxy.transport.headers,
-                        'v2ray-http-upgrade': proxy.transport?.type === 'httpupgrade' ? true : false,
-                        'v2ray-http-upgrade-fast-open': proxy.transport?.type === 'httpupgrade' ? proxy.tcp_fast_open : false,
-                    } : undefined,
-                    'reality-opts': proxy.tls.reality?.enabled ? {
-                        'public-key': proxy.tls.reality.public_key,
-                        'short-id': proxy.tls.reality.short_id,
-                    } : undefined,
-                    'grpc-opts': proxy.transport?.type === 'grpc' ? {
-                        'grpc-service-name': proxy.transport.service_name,
-                    } : undefined,
+                    network: this.getNetwork(proxy),
+                    'ws-opts': this.getWsOpts(proxy),
+                    'reality-opts': this.getRealityOpts(proxy),
+                    'grpc-opts': this.getGrpcOpts(proxy),
                     tfo: proxy.tcp_fast_open,
                     'skip-cert-verify': !!proxy.tls?.insecure,
                     ...(proxy.alpn ? { alpn: proxy.alpn } : {}),
